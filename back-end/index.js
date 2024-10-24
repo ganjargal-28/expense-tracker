@@ -1,87 +1,65 @@
 import express from "express";
 import bodyParser from "body-parser";
+import dotenv from "dotenv";
 import cors from "cors";
-import fs from "fs";
-import { error } from "console";
+import { neon } from "@neondatabase/serverless";
+
+dotenv.config();
+
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
 
 const port = 8000;
-const app = express();
+const sql = neon(`${process.env.DATABASE_URL}`);
 
-app.use(bodyParser.json());
-app.use(cors());
+app.post("/users", async (req, res) => {
+  const { email, password } = req.body;
 
-app.get("/", (request, response) => {
-  response.send("Hello GET huselt irlee");
+  try {
+    const existingUser = await sql`SELECT * FROM users WHERE email = ${email}`;
+
+    if (existingUser.length > 0) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+
+    const newUser = await sql`
+        INSERT INTO users (email, password) 
+        VALUES (${email}, ${password})
+        RETURNING id, email
+      `;
+
+    res
+      .status(201)
+      .json({ message: "User created successfully", user: newUser[0] });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error during create user" });
+  }
 });
 
-app.post("/sign-in", (request, response) => {
-  const { name, password } = request.body;
+app.post("/sign_in", async (req, res) => {
+  const { email, password } = req.body;
 
-  fs.readFile("./data/user.json", "utf-8", (readError, data) => {
-    if (readError) {
-      response.json({
-        success: false,
-        error: error,
-      });
+  try {
+    const user = await sql`SELECT * FROM users WHERE email = ${email}`;
+    if (user.length === 0) {
+      return res.status(400).json({ message: "email or password not match" });
     }
 
-    let savedData = data ? JSON.parse(data) : [];
-
-    const registeredUser = savedData.filter(
-      (user) => user.name === name && user.password === password
-    );
-    if (registeredUser.length > 0) {
-      response.json({
-        success: true,
-        user: registeredUser[0],
-      });
-    } else {
-      response.json({
-        success: false,
-      });
-    }
-  });
-});
-
-app.post("/sign-up", (request, response) => {
-  const { name, email, password } = request.body;
-
-  fs.readFile("./data/user.json", "utf-8", (readError, data) => {
-    let savedData = data ? JSON.parse(data) : [];
-
-    if (readError) {
-      response.json({
-        success: false,
-        error: error,
-      });
+    if (user[0].password !== password) {
+      return res.status(400).json({ message: "password not match" });
     }
 
-    console.log(data);
-
-    const newUser = {
-      id: Date.now().toString(),
-      name: name,
-      email: email,
-      password: password,
-    };
-    savedData.push(newUser);
-
-    fs.writeFile("./data/user.json", JSON.stringify(savedData), (error) => {
-      if (error) {
-        response.json({
-          success: false,
-          error: error,
-        });
-      } else {
-        response.json({
-          success: true,
-          user: newUser,
-        });
-      }
-    });
-  });
+    res.status(200).json({ message: "Login successful", user: user[0] });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Internal server error during login user" });
+  }
 });
 
 app.listen(port, () => {
-  console.log(`Server ajillaj bn http://localhost:${port}`);
+  console.log(`http://localhost:${port}`);
 });
