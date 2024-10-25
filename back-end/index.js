@@ -39,7 +39,7 @@ app.post("/users", async (req, res) => {
   }
 });
 
-app.post("/sign_in", async (req, res) => {
+app.post("/sign_up", async (req, res) => {
   const { email, password } = req.body;
 
   try {
